@@ -1,0 +1,10 @@
+statusd
+-------
+
+statusd - a lightweight status daemon, to be used with dwm.
+Configure it using the FORMAT string in statusd.c:
+
+	%b - battery icon & percent (uses /sys/class/power_supply)
+	%d - day in year, ex. '16 Nov'
+	%t - current 24h time, ex. '15:22'
+	%n - network icon (uses DBus + NetworkManager)
