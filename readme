@@ -8,3 +8,4 @@ Configurable using the FORMAT string in statusd.c:
 	%d - day in year, ex. '16 Nov'
 	%t - current 24h time, ex. '15:22'
 	%n - network icon (uses DBus + NetworkManager)
+	%v - volume muted/not-muted icon (pamixer)
