@@ -1,6 +1,7 @@
 /* statusd - a lightweight status daemon
    Copyright (c) 2022 bellrise */
 
+#define _XOPEN_SOURCE
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
@@ -9,7 +10,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
-#include <wchar.h>
 
 #include "nm-def.h"
 
@@ -20,8 +20,9 @@
    	 %b - battery icon & percent
  	 %d - day in year, ex. '16 Nov'
      %t - current time, in HH:MM format
-	 %n - network icon */
-#define FORMAT "%b %n | %d %t"
+	 %n - network icon
+	 %v - volume muted/not-muted icon */
+#define FORMAT "%v %n %b | %d %t"
 
 /* The maximum size of the output buffer. The actual string may only be
    MAXSIZ - 1 chars long. */
@@ -32,6 +33,7 @@ static int netstat_ask_networkmanager();
 static void statfmt(const char *fmt, char *res, int len);
 static void netstat(char *buf, int len);
 static void battstat(char *buf, int len);
+static void volstat(char *buf, int len);
 
 
 int main()
@@ -79,6 +81,10 @@ void statfmt(const char *fmt, char *res, int len)
 				break;
 			case 'n':
 				netstat(tmp, 8);
+				w += snprintf(res + w, len - w, "%s", tmp);
+				break;
+			case 'v':
+				volstat(tmp, 8);
 				w += snprintf(res + w, len - w, "%s", tmp);
 				break;
 			default:
@@ -169,4 +175,18 @@ static void battstat(char *buf, int len)
 		index = 4;
 
 	snprintf(buf, len, "%s %d%%", icons[percent / 20], percent);
+}
+
+static void volstat(char *buf, int len)
+{
+	char local[8];
+	FILE *f;
+
+	f = popen("pamixer --get-mute", "r");
+	if (!f)
+		return;
+
+	fgets(local, 8, f);
+	snprintf(buf, len, !strncmp(local, "true", 4) ? "" : "");
+	pclose(f);
 }
