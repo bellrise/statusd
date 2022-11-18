@@ -14,6 +14,7 @@ static void statfmt(const char *fmt, char *res, int len);
 void stat_net(char *buf, int len);
 void stat_power(char *buf, int len);
 void stat_volume(char *buf, int len);
+void stat_bluetooth(char *buf, int len);
 
 
 int main()
@@ -61,10 +62,13 @@ void statfmt(const char *fmt, char *res, int len)
 		}
 
 		switch (fmt[i + 1]) {
+			case 'B':
+				stat_bluetooth(tmp, 8);
+				w += snprintf(res + w, len - w, "%s", tmp);
+				break;
 			case 'b':
 				stat_power(tmp, 8);
 				w += snprintf(res + w, len - w, "%s", tmp);
-				break;
 				break;
 			case 'd':
 				time(&since_epoch);

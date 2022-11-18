@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdio.h>
 
+/* TODO: use <pulse/simple.h> instead of popen(pamixer) */
 
 void stat_volume(char *buf, int len)
 {
