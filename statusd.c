@@ -1,47 +1,44 @@
 /* statusd - a lightweight status daemon
    Copyright (c) 2022 bellrise */
 
-#define _XOPEN_SOURCE
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-#include <dbus/dbus.h>
-#include <string.h>
+#include <X11/Xlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <stdio.h>
 #include <time.h>
 
-#include "nm-def.h"
+#include "config.h"
 
-
-/* The FORMAT string represents which information should be placed returned.
-   Here is a list of all possible values:
-
-   	 %b - battery icon & percent
- 	 %d - day in year, ex. '16 Nov'
-     %t - current time, in HH:MM format
-	 %n - network icon
-	 %v - volume muted/not-muted icon */
-#define FORMAT "%v %n %b | %d %t"
-
-/* The maximum size of the output buffer. The actual string may only be
-   MAXSIZ - 1 chars long. */
-#define MAXSIZ 256
-
-
-static int netstat_ask_networkmanager();
 static void statfmt(const char *fmt, char *res, int len);
-static void netstat(char *buf, int len);
-static void battstat(char *buf, int len);
-static void volstat(char *buf, int len);
+
+void stat_net(char *buf, int len);
+void stat_power(char *buf, int len);
+void stat_volume(char *buf, int len);
 
 
 int main()
 {
 	char res[MAXSIZ];
+	Display *dpy;
+	Window win;
 
-	statfmt(FORMAT, res, MAXSIZ);
-	printf("%s\n", res);
+	dpy = XOpenDisplay(NULL);
+	if (!dpy) {
+		puts("failed to open display");
+		return 1;
+	}
+
+	win = DefaultRootWindow(dpy);
+
+	while (1) {
+		statfmt(FORMAT, res, MAXSIZ);
+		XStoreName(dpy, win, res);
+		XSync(dpy, win);
+		sleep(UPDATE_EVERY);
+	}
+
+	XCloseDisplay(dpy);
+	return 0;
 }
 
 void statfmt(const char *fmt, char *res, int len)
@@ -65,7 +62,7 @@ void statfmt(const char *fmt, char *res, int len)
 
 		switch (fmt[i + 1]) {
 			case 'b':
-				battstat(tmp, 8);
+				stat_power(tmp, 8);
 				w += snprintf(res + w, len - w, "%s", tmp);
 				break;
 				break;
@@ -80,113 +77,18 @@ void statfmt(const char *fmt, char *res, int len)
 				w += snprintf(res + w, len - w, "%02d:%02d", tm_now->tm_hour, tm_now->tm_min);
 				break;
 			case 'n':
-				netstat(tmp, 8);
+				stat_net(tmp, 8);
 				w += snprintf(res + w, len - w, "%s", tmp);
 				break;
 			case 'v':
-				volstat(tmp, 8);
+				stat_volume(tmp, 8);
 				w += snprintf(res + w, len - w, "%s", tmp);
 				break;
 			default:
-				w += snprintf(res + w, len - w, "%%%c", fmt[i - 1]);
+				w += snprintf(res + w, len - w, "%%%c", fmt[i + 1]);
 				break;
 		}
 
 		i += 2;
 	}
-}
-
-static int netstat_ask_networkmanager()
-{
-	DBusConnection *conn;
-	DBusMessage *msg;
-	DBusMessage *reply;
-	DBusError err;
-	unsigned res;
-
-	reply = NULL;
-	msg = NULL;
-	res = 0;
-
-	dbus_error_init(&err);
-	conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
-
-	if (dbus_error_is_set(&err) || !conn)
-		goto done;
-
-	msg = dbus_message_new_method_call("org.freedesktop.NetworkManager",
-			"/org/freedesktop/NetworkManager", "org.freedesktop.NetworkManager",
-			"CheckConnectivity");
-	if (!msg)
-		goto done;
-
-	if (!(reply = dbus_connection_send_with_reply_and_block(conn, msg, -1, &err)))
-		goto done;
-
-	if (dbus_error_is_set(&err))
-		goto done;
-
-	if (!dbus_message_get_args(reply, &err, DBUS_TYPE_UINT32, &res, DBUS_TYPE_INVALID))
-		goto done;
-
-done:
-	dbus_error_free(&err);
-	if (msg)
-		dbus_message_unref(msg);
-	if (reply)
-		dbus_message_unref(reply);
-
-	return res;
-}
-
-static void netstat(char *buf, int len)
-{
-	unsigned stat = netstat_ask_networkmanager();
-
-	if (stat <= NM_CONNECTIVITY_PORTAL) {
-		/* Unknown, none or portal connectivity. */
-		snprintf(buf, len, "");
-		return;
-	}
-
-	/* Limited or full connection. */
-	snprintf(buf, len, "");
-}
-
-static void battstat(char *buf, int len)
-{
-	unsigned percent, index;
-	FILE *f;
-
-	f = fopen("/sys/class/power_supply/BATT/capacity", "r");
-	if (!f) {
-		snprintf(buf, len, "no bat");
-		return;
-	}
-
-	/* Set percent. */
-	fscanf(f, "%u", &percent);
-	fclose(f);
-
-	/* Set icon. */
-	const char *icons[] = {"", "", "", "", ""};
-	index = percent / 20;
-	if (index > 4)
-		index = 4;
-
-	snprintf(buf, len, "%s %d%%", icons[percent / 20], percent);
-}
-
-static void volstat(char *buf, int len)
-{
-	char local[8];
-	FILE *f;
-
-	f = popen("pamixer --get-mute", "r");
-	if (!f)
-		return;
-
-	fgets(local, 8, f);
-	snprintf(buf, len, !strncmp(local, "true", 4) ? "" : "");
-	pclose(f);
 }
